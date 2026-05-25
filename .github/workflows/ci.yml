@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Windows MSVC (primary target) ──────────────────────────────
+          - name: "Windows / MSVC"
+            os: windows-latest
+            toolchain: stable-x86_64-pc-windows-msvc
+            llvm_install: |
+              choco install llvm --version 19.1.7 -y
+            lldb_prefix: 'C:\Program Files\LLVM'
+            libclang_path: 'C:\Program Files\LLVM\bin'
+
+          # ── Ubuntu 24.04 ───────────────────────────────────────────────
+          - name: "Linux / GNU"
+            os: ubuntu-24.04
+            toolchain: stable-x86_64-unknown-linux-gnu
+            llvm_install: |
+              wget https://apt.llvm.org/llvm.sh
+              chmod +x llvm.sh
+              sudo ./llvm.sh 19
+              sudo apt-get install -y liblldb-19-dev lldb-19
+            lldb_prefix: '/usr/lib/llvm-19'
+            libclang_path: '/usr/lib/llvm-19/lib'
+
+          # ── macOS (Apple Silicon) ──────────────────────────────────────
+          - name: "macOS / arm64"
+            os: macos-latest
+            toolchain: stable-aarch64-apple-darwin
+            llvm_install: |
+              brew install llvm@19
+            lldb_prefix: '/opt/homebrew/opt/llvm@19'
+            libclang_path: '/opt/homebrew/opt/llvm@19/lib'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install LLVM 19
+        run: ${{ matrix.llvm_install }}
+        shell: bash
+
+      # Windows: ensure MSVC tools are on PATH (needed for cl.exe / link.exe).
+      - name: Setup MSVC environment (Windows only)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Verify LLDB installation
+        run: |
+          "${{ matrix.lldb_prefix }}/bin/lldb" --version || \
+          "${{ matrix.lldb_prefix }}/bin/lldb.exe" --version
+        shell: bash
+        continue-on-error: true
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+        env:
+          LLDB_SYS_PREFIX: ${{ matrix.lldb_prefix }}
+          LIBCLANG_PATH:   ${{ matrix.libclang_path }}
+
+      - name: cargo build
+        run: cargo build --all
+        env:
+          LLDB_SYS_PREFIX: ${{ matrix.lldb_prefix }}
+          LIBCLANG_PATH:   ${{ matrix.libclang_path }}
+
+      - name: cargo test
+        run: cargo test --all
+        env:
+          LLDB_SYS_PREFIX: ${{ matrix.lldb_prefix }}
+          LIBCLANG_PATH:   ${{ matrix.libclang_path }}
+          # Windows: make liblldb.dll findable at test runtime.
+          PATH: ${{ matrix.lldb_prefix }}/bin:${{ env.PATH }}
+
+  # ── Docs build (does NOT require LLVM thanks to DOCS_RS short-circuit) ──
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: DOCS_RS=1 cargo doc --no-deps --all

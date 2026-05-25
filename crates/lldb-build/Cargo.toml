@@ -1,0 +1,6 @@
+[package]
+name = "lldb-build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Build helper for lldb-sys: LLVM/LLDB discovery on Windows, macOS, and Linux"

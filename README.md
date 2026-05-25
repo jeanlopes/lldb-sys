@@ -1,155 +1,156 @@
-# lldb-sys — Windows Implementation
+# lldb-rs
 
-[![Crates.io](https://img.shields.io/crates/v/lldb-sys.svg)](https://crates.io/crates/lldb-sys)
+Safe Rust bindings for LLDB 19 — **Windows-first**, with Linux and macOS support.
 
-Raw bindings to the [LLDB](https://lldb.llvm.org/) C++ API for use on **Windows**, built on top of the [`lldb-sys`](https://crates.io/crates/lldb-sys) crate published by the [endoli](https://github.com/endoli/lldb-sys.rs) project.
+## Crates
 
-This document describes everything you need to build and use `lldb-sys` on Windows.
+| Crate | Description |
+|---|---|
+| `lldb-build` | Build helper: LLVM/LLDB discovery for all platforms |
+| `lldb-sys` | Raw FFI bindings (unsafe) |
+| `lldb-safe` | Safe Rust wrappers (start here) |
 
----
+## Quick Start
 
-## Overview
+### 1. Install LLVM 19
 
-`lldb-sys` exposes raw FFI bindings to the LLDB debugger API, which is part of the LLVM project. On Windows, LLDB ships as a shared library (`liblldb.dll`) accompanied by an import library (`liblldb.lib`). The Rust build script (`build.rs`) relies on `llvm-config` to locate headers and libraries at compile time.
-
----
-
-## Prerequisites
-
-### 1. Rust toolchain
-
-Install the **MSVC** ABI toolchain, which is required to link against the LLVM/LLDB libraries on Windows:
-
+**Windows (Chocolatey):**
 ```powershell
-rustup install stable-x86_64-pc-windows-msvc
-rustup default stable-x86_64-pc-windows-msvc
+.\scripts\install-llvm.ps1
 ```
 
-> **Note:** The GNU toolchain (`x86_64-pc-windows-gnu`) is **not** supported because LLDB's Windows libraries are built with MSVC.
-
-### 2. Visual Studio Build Tools
-
-Install [Visual Studio 2022 Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and select the **"Desktop development with C++"** workload. This provides the MSVC compiler (`cl.exe`) and the Windows SDK, both of which are needed to compile the C++ bridge in `lldb-sys`.
-
-### 3. LLVM with LLDB
-
-Download and install a pre-built LLVM release that includes LLDB:
-
-- Go to the [LLVM GitHub Releases page](https://github.com/llvm/llvm-project/releases).
-- Download the Windows installer, e.g. `LLVM-19.x.x-win64.exe`.
-- Run the installer and choose **"Add LLVM to the system PATH"** when prompted.
-
-Default installation path: `C:\Program Files\LLVM`
-
-Verify the installation:
-
-```powershell
-llvm-config --version
-lldb --version
+**Linux:**
+```bash
+wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 19
+sudo apt-get install -y liblldb-19-dev lldb-19
+export LLDB_SYS_PREFIX=/usr/lib/llvm-19
+export LIBCLANG_PATH=/usr/lib/llvm-19/lib
 ```
 
----
-
-## Environment Setup
-
-The `build.rs` script calls `llvm-config` to discover include paths and library directories. Set the `LLVM_CONFIG` environment variable to point to the correct binary if it is not already on your `PATH`:
-
-```powershell
-$env:LLVM_CONFIG = "C:\Program Files\LLVM\bin\llvm-config.exe"
+**macOS:**
+```bash
+brew install llvm@19
+export LLDB_SYS_PREFIX=/opt/homebrew/opt/llvm@19
+export LIBCLANG_PATH=/opt/homebrew/opt/llvm@19/lib
 ```
 
-To make this permanent, add it to your user or system environment variables via **System Properties → Advanced → Environment Variables**.
-
-### Optional: Custom library path
-
-If `liblldb.lib` lives in a directory that is not reported by `llvm-config --libdir` (e.g. a custom LLVM build), set:
+### 2. Validate the environment
 
 ```powershell
-$env:LLDB_LIB_PATH = "C:\path\to\lldb\lib"
+.\scripts\validate-env.ps1        # Windows
 ```
 
-### Optional: Additional include directories
-
-For in-tree LLVM builds or custom setups where LLDB headers are in a non-standard location:
+### 3. Gate check: verify the C++ SB API works
 
 ```powershell
-$env:LLDB_ADDITIONAL_INCLUDE_DIRS = "C:\llvm-project\lldb\include;C:\llvm-project\build\tools\lldb\include"
+.\scripts\test-cpp-api.ps1        # Windows
 ```
 
----
+If this fails, `cargo build` will also fail — fix it first.
 
-## Adding `lldb-sys` to Your Project
-
-Add the dependency to `Cargo.toml` (replace `x.y.z` with the [latest version on crates.io](https://crates.io/crates/lldb-sys)):
-
-```toml
-[dependencies]
-lldb-sys = "x.y.z"
-```
-
----
-
-## Building on Windows
-
-With the environment variables set, build your project normally:
+### 4. Build
 
 ```powershell
+$env:LLDB_SYS_PREFIX = "C:\Program Files\LLVM"
+$env:LIBCLANG_PATH   = "C:\Program Files\LLVM\bin"
 cargo build
 ```
 
-The build script will:
-
-1. Call `llvm-config --includedir` to find the LLDB/LLVM headers.
-2. Call `llvm-config --libdir` to find the directory containing `liblldb.lib`.
-3. Compile the C++ bridge (`src/lldb/UnityBuild.cpp`) using the `cc` crate and the MSVC toolchain.
-4. Link against `liblldb.lib`, which at runtime requires `liblldb.dll` to be on the `PATH`.
-
-### Runtime: Making `liblldb.dll` Discoverable
-
-At runtime your application needs `liblldb.dll` (and any LLDB plug-in DLLs) to be on the Windows `PATH`. The simplest approach is to add the LLVM `bin` directory:
-
-```powershell
-$env:PATH += ";C:\Program Files\LLVM\bin"
-```
-
----
-
-## How the Windows Linking Works
-
-The `build.rs` script scans the LLDB library directory for a file matching `liblldb*.lib` and extracts the link name:
+### 5. Use
 
 ```rust
-if name.starts_with("liblldb") && name.ends_with(".lib") {
-    // Trim the trailing ".lib" — result is "liblldb"
-    return Some(name[0..name.len() - 4].into());
+use lldb_safe::Debugger;
+
+fn main() {
+    // Windows: set DLL search path before any LLDB code runs.
+    let dll_dir = std::env::var("LLDB_DLL_DIR")
+        .unwrap_or_else(|_| r"C:\Program Files\LLVM\bin".into());
+    lldb_safe::set_lldb_dll_dir(dll_dir.as_ref());
+
+    Debugger::initialize();
+
+    let dbg = Debugger::create(false).unwrap();
+    println!("{}", Debugger::version_string());
+
+    let target = dbg.create_target_simple("C:\\path\\to\\my.exe").unwrap();
+    let bp = target.breakpoint_by_name("main", None).unwrap();
+    println!("Breakpoint {} set ({} locations)", bp.id(), bp.num_locations());
+
+    let process = target
+        .launch(&[], &[], None, true)
+        .expect("launch failed");
+
+    println!("Process state: {:?}", process.state());
+
+    Debugger::terminate();
 }
 ```
 
-This causes Cargo to emit `cargo:rustc-link-lib=liblldb`, which tells the MSVC linker to link against `liblldb.lib`.
+## Environment Variables
 
----
+| Variable | Description |
+|---|---|
+| `LLDB_SYS_PREFIX` | Root of LLVM install (e.g. `C:\Program Files\LLVM`) |
+| `LLVM_SYS_PREFIX` | Alias for `LLDB_SYS_PREFIX` |
+| `LLVM_CONFIG` | Path to `llvm-config` binary |
+| `LIBCLANG_PATH` | Directory containing `libclang.dll` (needed by bindgen) |
+| `LLDB_DLL_DIR` | Runtime DLL directory (Windows; set automatically by build.rs) |
 
-## Troubleshooting
+## Windows-specific Notes
 
-| Problem | Likely cause | Fix |
-|---|---|---|
-| `Could not run "llvm-config --includedir"` | `llvm-config` not found | Set `LLVM_CONFIG` env var |
-| `unable to locate shared library of liblldb` | No `liblldb*.lib` in the lib dir | Set `LLDB_LIB_PATH` to the correct directory |
-| Linker error: `cannot open input file 'liblldb.lib'` | LLVM installed without LLDB libraries | Reinstall LLVM including the LLDB component |
-| Runtime error: `The code execution cannot proceed … liblldb.dll was not found` | `liblldb.dll` not on `PATH` | Add `C:\Program Files\LLVM\bin` to `PATH` |
-| Build fails with `error C2059` or similar C++ errors | Wrong compiler (GNU instead of MSVC) | Switch to the `x86_64-pc-windows-msvc` Rust target |
+### Runtime DLL
+`liblldb.dll` must be findable at runtime. Call `set_lldb_dll_dir()` before
+any LLDB code, or copy `liblldb.dll` next to your executable.
 
----
+### CRT compatibility
+`liblldb.dll` from the official LLVM installer uses the **dynamic MSVC CRT**
+(`/MD`). The C++ wrapper layer is compiled with `/MD` to match. Do not mix
+with `/MT` builds.
 
-## References
+### MSVC environment
+Ensure you run `cargo build` from a **Developer Command Prompt** (or run
+`vcvarsall.bat x64` first) so that `cl.exe` and `link.exe` are on PATH.
+The CI uses `ilammy/msvc-dev-cmd@v1` for this.
 
-- [`lldb-sys` on crates.io](https://crates.io/crates/lldb-sys)
-- [endoli/lldb-sys.rs on GitHub](https://github.com/endoli/lldb-sys.rs) — upstream repository
-- [LLVM Releases](https://github.com/llvm/llvm-project/releases)
-- [LLDB Homepage](https://lldb.llvm.org/)
+## Architecture
 
----
+```
+┌─────────────────────────┐
+│       lldb-safe          │  Safe Rust API (Debugger, Target, Process, …)
+└───────────┬─────────────┘
+            │  calls
+┌───────────▼─────────────┐
+│       lldb-sys           │  Raw FFI (bindgen-generated bindings)
+└───────────┬─────────────┘
+            │  links
+┌───────────▼─────────────┐
+│   lldb_c_wrapper.lib     │  Thin C++ → C adapter (compiled by build.rs)
+└───────────┬─────────────┘
+            │  links
+┌───────────▼─────────────┐
+│      liblldb.dll         │  Official LLDB 19 (from LLVM installer)
+└─────────────────────────┘
+```
 
-## License
+## Running Tests
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+```powershell
+$env:LLDB_SYS_PREFIX = "C:\Program Files\LLVM"
+$env:LIBCLANG_PATH   = "C:\Program Files\LLVM\bin"
+# Add DLL to PATH so the test runner finds it at runtime
+$env:PATH = "C:\Program Files\LLVM\bin;$env:PATH"
+
+cargo test -p lldb-safe -- --test-threads=1
+```
+
+> Tests must run single-threaded (`--test-threads=1`) because LLDB's
+> `SBDebugger::Initialize` / `Terminate` are global and not reentrant.
+
+## Contributing
+
+See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) (TODO).
+
+Known hard problems:
+- Callbacks / event listeners across FFI (function pointers + userdata)
+- Structured exceptions on Windows vs POSIX signals
+- UTF-16 paths on Windows (LLDB internals expect UTF-8)

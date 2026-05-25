@@ -1,0 +1,17 @@
+[package]
+name = "lldb-sys"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Raw FFI bindings to LLDB 19 (Windows, macOS, Linux)"
+links = "lldb"
+build = "build.rs"
+
+[dependencies]
+libc.workspace = true
+
+[build-dependencies]
+lldb-build = { path = "../lldb-build" }
+cc = "1"
+bindgen = "0.71"
+glob = "0.3"

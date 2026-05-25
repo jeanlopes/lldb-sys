@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "crates/lldb-build",
+    "crates/lldb-sys",
+    "crates/lldb-safe",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/your-org/lldb-rs"
+
+[workspace.dependencies]
+libc = "0.2"
