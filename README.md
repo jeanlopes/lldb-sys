@@ -1,6 +1,6 @@
 # lldb-rs
 
-Safe Rust bindings for LLDB 19 — **Windows-first**, with Linux and macOS support.
+Safe Rust bindings for LLDB 19 — **Windows only** (`x86_64-pc-windows-msvc`).
 
 ## Crates
 
@@ -14,25 +14,19 @@ Safe Rust bindings for LLDB 19 — **Windows-first**, with Linux and macOS suppo
 
 ### 1. Install LLVM 19
 
-**Windows (Chocolatey):**
 ```powershell
 .\scripts\install-llvm.ps1
 ```
 
-**Linux:**
-```bash
-wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 19
-sudo apt-get install -y liblldb-19-dev lldb-19
-export LLDB_SYS_PREFIX=/usr/lib/llvm-19
-export LIBCLANG_PATH=/usr/lib/llvm-19/lib
+Or manually via winget:
+
+```powershell
+winget install LLVM.LLVM --version 19.1.7
 ```
 
-**macOS:**
-```bash
-brew install llvm@19
-export LLDB_SYS_PREFIX=/opt/homebrew/opt/llvm@19
-export LIBCLANG_PATH=/opt/homebrew/opt/llvm@19/lib
-```
+> The official LLVM Windows installer does **not** include LLDB C++ API headers (`lldb/API/SB*.h`).
+> The install script sets up the virtual prefix `C:\lldb-dev` which combines headers from the
+> LLVM GitHub release with the binaries from the installer. See [scripts/install-llvm.ps1](scripts/install-llvm.ps1).
 
 ### 2. Validate the environment
 
@@ -51,10 +45,10 @@ If this fails, `cargo build` will also fail — fix it first.
 ### 4. Build
 
 ```powershell
-$env:LLDB_SYS_PREFIX = "C:\Program Files\LLVM"
-$env:LIBCLANG_PATH   = "C:\Program Files\LLVM\bin"
 cargo build
 ```
+
+No environment variables are required if `C:\lldb-dev` exists (created by the install script).
 
 ### 5. Use
 
@@ -90,11 +84,13 @@ fn main() {
 
 | Variable | Description |
 |---|---|
-| `LLDB_SYS_PREFIX` | Root of LLVM install (e.g. `C:\Program Files\LLVM`) |
+| `LLDB_SYS_PREFIX` | Root of LLVM install (default: `C:\lldb-dev` or `C:\Program Files\LLVM`) |
 | `LLVM_SYS_PREFIX` | Alias for `LLDB_SYS_PREFIX` |
-| `LLVM_CONFIG` | Path to `llvm-config` binary |
-| `LIBCLANG_PATH` | Directory containing `libclang.dll` (needed by bindgen) |
-| `LLDB_DLL_DIR` | Runtime DLL directory (Windows; set automatically by build.rs) |
+| `LLVM_CONFIG` | Path to `llvm-config` binary (optional, advisory only) |
+| `LIBCLANG_PATH` | Directory containing `libclang.dll` (auto-detected by `build.rs`) |
+| `LLDB_DLL_DIR` | Runtime DLL directory (baked in by `build.rs`; rarely needed manually) |
+
+All variables are optional when `C:\lldb-dev` is present.
 
 ## Windows-specific Notes
 
@@ -135,13 +131,11 @@ The CI uses `ilammy/msvc-dev-cmd@v1` for this.
 ## Running Tests
 
 ```powershell
-$env:LLDB_SYS_PREFIX = "C:\Program Files\LLVM"
-$env:LIBCLANG_PATH   = "C:\Program Files\LLVM\bin"
-# Add DLL to PATH so the test runner finds it at runtime
-$env:PATH = "C:\Program Files\LLVM\bin;$env:PATH"
-
 cargo test -p lldb-safe -- --test-threads=1
 ```
+
+No environment variables needed. `build.rs` copies `liblldb.dll` and `python310.dll` next to the
+test binary automatically.
 
 > Tests must run single-threaded (`--test-threads=1`) because LLDB's
 > `SBDebugger::Initialize` / `Terminate` are global and not reentrant.
@@ -152,5 +146,5 @@ See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) (TODO).
 
 Known hard problems:
 - Callbacks / event listeners across FFI (function pointers + userdata)
-- Structured exceptions on Windows vs POSIX signals
+- Structured exceptions on Windows (SEH vs C++ exceptions)
 - UTF-16 paths on Windows (LLDB internals expect UTF-8)
