@@ -1,10 +1,19 @@
 # Status do Projeto
 
+## Estado atual: **FUNCIONANDO** ✅
+
+`cargo build` e `cargo test` passam sem nenhuma variável de ambiente.
+
+```
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+---
+
 ## O que foi construído
 
-O projeto está **completo no código** — 35 arquivos criados do zero:
+Projeto completo — 35+ arquivos criados do zero:
 
-### Estrutura final
 ```
 lldb-sys/
 ├── Cargo.toml                          workspace (3 crates)
@@ -16,7 +25,8 @@ lldb-sys/
 │   ├── lldb-build/src/lib.rs           descoberta LLVM: registry → choco → scoop → paths → llvm-config
 │   │
 │   ├── lldb-sys/
-│   │   ├── build.rs                    compila C++, roda bindgen, linka liblldb
+│   │   ├── build.rs                    compila C++, roda bindgen, linka liblldb,
+│   │   │                               copia DLLs para target/ automaticamente
 │   │   ├── src/lib.rs                  include!(bindings.rs)
 │   │   └── wrapper/
 │   │       ├── include/lldb_c.h        API C pública (SBDebugger...SBValue)
@@ -34,62 +44,91 @@ lldb-sys/
 │   │
 │   └── lldb-safe/
 │       ├── src/{debugger,target,process,thread,frame,breakpoint,value,error}.rs
-│       └── tests/integration.rs        5 smoke tests
+│       └── tests/integration.rs        6 smoke tests (todos passando)
 │
 └── scripts/
-    ├── install-llvm.ps1                instala via choco, seta env vars
-    ├── validate-env.ps1                verifica tudo (DLL, imports, MSVC, bindgen)
-    └── test-cpp-api.ps1                gate check Phase 2: compila e roda C++ mínimo
+    ├── install-llvm.ps1                instala via winget, seta env vars
+    ├── validate-env.ps1                verifica tudo (DLL, headers, MSVC, bindgen)
+    └── test-cpp-api.ps1                gate check: compila e roda C++ mínimo
 ```
 
 ---
 
-## Próximos passos imediatos (você precisa fazer)
+## Ambiente configurado (Windows)
 
-**1. Instalar LLVM 19** (pré-requisito para qualquer `cargo build`):
+| Componente | Versão | Localização |
+|---|---|---|
+| LLVM / LLDB | 19.1.7 | `C:\Program Files\LLVM` |
+| Python | 3.10.11 | `C:\Users\jeano\AppData\Local\Programs\Python\Python310` |
+| LLDB headers | 19.1.7 | `C:\lldb-dev\include\lldb\` (baixados do GitHub) |
+| Visual Studio Build Tools | 2022 v17.14 | — |
+| Rust toolchain | stable-x86_64-pc-windows-msvc | — |
+
+O prefixo virtual `C:\lldb-dev` combina:
+- Headers do GitHub (`llvmorg-19.1.7`, sparse-checkout de `lldb/include`)
+- `liblldb.lib` + `liblldb.dll` + `libclang.dll` copiados de `C:\Program Files\LLVM`
+
+---
+
+## Como rodar
+
+### Build
 ```powershell
-# Abrir PowerShell como administrador
-.\scripts\install-llvm.ps1
+cargo build          # sem variáveis de ambiente necessárias
 ```
 
-**2. Abrir Developer Command Prompt** (para `cl.exe` / `link.exe`):
+### Testes
 ```powershell
-# Ou instalar se não tiver:
-choco install visualstudio2022buildtools -y
+cargo test -p lldb-safe -- --test-threads=1   # sem variáveis de ambiente necessárias
 ```
 
-**3. Validar o ambiente:**
-```powershell
-.\scripts\validate-env.ps1
-```
+O `build.rs` copia automaticamente `liblldb.dll` e `python310.dll` para
+`target/debug/deps/` e `target/debug/`, então o Windows encontra as DLLs
+sem PATH manual.
 
-**4. Gate check — verificar que a SB API funciona em C++:**
+### Validação do ambiente
 ```powershell
-.\scripts\test-cpp-api.ps1
-# Se isso falhar → o projeto para aqui até resolver o linking
-```
-
-**5. Primeiro build Rust:**
-```powershell
-$env:LLDB_SYS_PREFIX = "C:\Program Files\LLVM"
-$env:LIBCLANG_PATH   = "C:\Program Files\LLVM\bin"
-cargo build -p lldb-sys
-```
-
-**6. Testes:**
-```powershell
-$env:PATH = "C:\Program Files\LLVM\bin;$env:PATH"
-cargo test -p lldb-safe -- --test-threads=1
+.\scripts\validate-env.ps1    # deve mostrar "All checks passed!"
+.\scripts\test-cpp-api.ps1    # deve mostrar "Phase 2 gate check PASSED"
 ```
 
 ---
 
-## Riscos que ainda podem aparecer no primeiro build
+## O que foi resolvido durante o setup
+
+| Problema | Causa | Solução |
+|---|---|---|
+| `bindgen::use_core(false)` não compila | API mudou no bindgen 0.71 | Argumento removido |
+| LLDB não encontrado no build | LLVM instalado mas sem headers | Prefix virtual `C:\lldb-dev` + `C:\lldb-dev` adicionado a `try_known_paths()` |
+| `bindgen` não achava `libclang.dll` | Faltava no prefix virtual | Copiado + fallback em cascata no `build.rs` |
+| `cargo test` falhava com `STATUS_DLL_NOT_FOUND` | `python310.dll` faltando em runtime | Python 3.10 instalado; `build.rs` copia DLLs para `target/` |
+| `test-cpp-api.ps1` não achava headers | Script usava `C:\Program Files\LLVM\include` | Script atualizado para usar prefix correto |
+| `validate-env.ps1` reportava falsos negativos | Script não conhecia `C:\lldb-dev` | Script atualizado com auto-detecção e checks revisados |
+
+---
+
+## Próximos sprints
+
+| Sprint | Entregável | Critério de sucesso |
+|---|---|---|
+| ~~1~~ | ~~Workspace + lldb-build~~ | ✅ |
+| ~~2~~ | ~~LLVM instalado + validado~~ | ✅ |
+| ~~3~~ | ~~Wrapper C++ MVP~~ | ✅ |
+| ~~4~~ | ~~build.rs + bindings.rs~~ | ✅ |
+| ~~5~~ | ~~lldb-safe MVP~~ | ✅ |
+| ~~6~~ | ~~Testes de integração~~ | ✅ 6/6 passando |
+| **7** | **CI multi-plataforma** | Green em Windows, Linux, macOS |
+| 8 | SBTarget, SBProcess, SBThread, SBFrame completos | Stepping funciona |
+| 9 | SBBreakpoint, SBValue | Leitura de variáveis funciona |
+| 10 | lldb-safe completo + docs | API pública estável |
+
+---
+
+## Riscos conhecidos (ainda válidos)
 
 | Sintoma | Causa provável | Fix |
 |---|---|---|
-| `bindgen: error: header not found` | `LIBCLANG_PATH` errado | Aponta para `C:\Program Files\LLVM\bin` |
-| `error LNK2019: unresolved external` em `liblldb` | import lib não encontrado | Confirma que `C:\Program Files\LLVM\lib\liblldb.lib` existe |
-| `cannot open input file 'liblldb.lib'` | `lib_dir` errado no `lldb-build` | Seta `LLDB_SYS_PREFIX` explicitamente |
-| Runtime: `DLL not found` | `liblldb.dll` não está no PATH | Chama `set_lldb_dll_dir()` ou adiciona `C:\Program Files\LLVM\bin` ao PATH |
-| `C2589: const in unexpected location` | Incompatibilidade clang-cl + MSVC headers | Adiciona `/permissive-` no `cc::Build` |
+| CI Linux/macOS falhando | `LLDB_SYS_PREFIX` não setado na matrix | Conferir `.github/workflows/ci.yml` |
+| `liblldb.dll` não exporta símbolo esperado | Versão LLDB diferente da compilada | Verificar com `dumpbin /exports` |
+| `C2589: const in unexpected location` | Incompatibilidade clang-cl + MSVC headers | Adicionar `/permissive-` no `cc::Build` |
+| Python Traceback no início dos testes | LLDB tenta importar módulo `lldb` via Python | Cosmético — não afeta os testes |

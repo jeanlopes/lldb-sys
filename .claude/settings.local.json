@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(choco --version 2>$null)",
+      "PowerShell(winget --version 2>$null)",
+      "PowerShell(scoop --version 2>$null)",
+      "PowerShell(winget install LLVM.LLVM --version 19.1.7 --silent --accept-package-agreements --accept-source-agreements 2>&1)",
+      "PowerShell(cargo build 2>&1)",
+      "PowerShell(& \"C:\\\\lldb-dev\\\\bin\\\\lldb.exe\" --version 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files\\\\LLVM\\\\bin\\\\lldb.exe\" --version 2>&1)",
+      "PowerShell(winget install Python.Python.3.10 --silent --accept-package-agreements --accept-source-agreements 2>&1)",
+      "PowerShell(.\\\\scripts\\\\validate-env.ps1)",
+      "PowerShell(.\\\\scripts\\\\test-cpp-api.ps1)",
+      "PowerShell(cargo clean -p lldb-sys 2>&1)",
+      "PowerShell(cargo test -p lldb-safe -- --test-threads=1 2>&1)"
+    ]
+  }
+}

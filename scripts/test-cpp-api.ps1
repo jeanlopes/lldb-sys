@@ -14,11 +14,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $Prefix) { $Prefix = "C:\Program Files\LLVM" }
+# Resolve the LLDB dev prefix (headers + lib).
+# Discovery: env var → C:\lldb-dev (virtual prefix) → C:\Program Files\LLVM
+if (-not $Prefix) {
+    if (Test-Path "C:\lldb-dev\include\lldb\API\LLDB.h") { $Prefix = "C:\lldb-dev" }
+    else { $Prefix = "C:\Program Files\LLVM" }
+}
 
 $include = "$Prefix\include"
 $lib     = "$Prefix\lib"
-$bin     = "$Prefix\bin"
+
+# The LLVM tools (clang-cl, lldb) may live in a separate bin if using the virtual prefix.
+# Prefer $Prefix\bin, fall back to the system LLVM install.
+$bin = "$Prefix\bin"
+if (-not (Test-Path "$bin\clang-cl.exe") -and (Test-Path "C:\Program Files\LLVM\bin\clang-cl.exe")) {
+    $bin = "C:\Program Files\LLVM\bin"
+}
 
 $src = Join-Path $env:TEMP "lldb_test.cpp"
 $exe = Join-Path $env:TEMP "lldb_test.exe"
@@ -81,8 +92,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Compilation OK.  Running test..." -ForegroundColor Cyan
 
-# Add LLDB bin to PATH so the DLL is found at runtime
-$env:PATH = "$bin;$env:PATH"
+# Add LLDB bin + Python 3.10 (liblldb.dll dependency) to PATH for runtime
+$py310dir = @(
+    "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python310",
+    "C:\Program Files\Python310"
+) | Where-Object { Test-Path "$_\python310.dll" } | Select-Object -First 1
+$env:PATH = "$bin;C:\Program Files\LLVM\bin;$py310dir;$env:PATH"
 & $exe
 
 if ($LASTEXITCODE -ne 0) {

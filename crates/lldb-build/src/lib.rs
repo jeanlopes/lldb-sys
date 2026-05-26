@@ -194,6 +194,7 @@ fn try_scoop() -> Option<LldbConfig> {
 fn try_known_paths() -> Option<LldbConfig> {
     let candidates: &[&str] = if cfg!(target_os = "windows") {
         &[
+            r"C:\lldb-dev",
             r"C:\Program Files\LLVM",
             r"C:\LLVM",
         ]

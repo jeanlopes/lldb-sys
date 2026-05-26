@@ -10,7 +10,9 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/your-org/lldb-rs"
-
+repository = "https://github.com/jeanlopes/lldb-sys"
+readme = "README.md"
+keywords = ["lldb", "debugger", "ffi", "llvm"]
+categories = ["external-ffi-bindings", "development-tools::debugging"]
 [workspace.dependencies]
 libc = "0.2"

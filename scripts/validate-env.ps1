@@ -30,13 +30,24 @@ function Check([string]$label, [scriptblock]$test) {
 }
 
 # ── LLVM prefix ────────────────────────────────────────────────────────────
+# Discovery order: LLDB_SYS_PREFIX env var → C:\lldb-dev (virtual prefix) → C:\Program Files\LLVM
 $prefix = $env:LLDB_SYS_PREFIX
-if (-not $prefix) { $prefix = "C:\Program Files\LLVM" }
+if (-not $prefix) {
+    if (Test-Path "C:\lldb-dev\bin\liblldb.dll") { $prefix = "C:\lldb-dev" }
+    else { $prefix = "C:\Program Files\LLVM" }
+}
+# LIBCLANG_PATH: use env var, else fall back to known locations
+$libclangDir = $env:LIBCLANG_PATH
+if (-not $libclangDir) {
+    foreach ($candidate in @("$prefix\bin", "C:\Program Files\LLVM\bin")) {
+        if (Test-Path "$candidate\libclang.dll") { $libclangDir = $candidate; break }
+    }
+}
 
 Write-Host ""
 Write-Host "=== LLDB Build Environment Validator ===" -ForegroundColor Cyan
 Write-Host "  LLDB_SYS_PREFIX = $prefix"
-Write-Host "  LIBCLANG_PATH   = $env:LIBCLANG_PATH"
+Write-Host "  LIBCLANG_PATH   = $libclangDir  $(if ($env:LIBCLANG_PATH) {'(from env)'} else {'(auto-detected)'})"
 Write-Host ""
 
 # ── Section 1: LLVM binaries ───────────────────────────────────────────────
@@ -45,8 +56,11 @@ Write-Host "LLVM binaries:" -ForegroundColor Yellow
 Check "lldb.exe found" {
     Test-Path (Join-Path $prefix "bin\lldb.exe")
 }
-Check "llvm-config.exe found" {
-    Test-Path (Join-Path $prefix "bin\llvm-config.exe")
+Check "llvm-config.exe found (optional on Windows)" {
+    # llvm-config is not shipped by the official LLVM Windows installer; skip gracefully.
+    $hasIt = Test-Path (Join-Path $prefix "bin\llvm-config.exe")
+    if (-not $hasIt) { Write-Host "  [--]  llvm-config.exe absent (expected on Windows installer)" -ForegroundColor DarkYellow }
+    $true   # non-fatal
 }
 Check "clang.exe found" {
     Test-Path (Join-Path $prefix "bin\clang.exe")
@@ -68,7 +82,11 @@ Check "libclang.dll found" {
 Write-Host ""
 Write-Host "LLDB version:" -ForegroundColor Yellow
 try {
+    # python310.dll must be findable for liblldb.dll to load; add known locations to PATH.
+    $savedPath = $env:PATH
+    $env:PATH = "$prefix\bin;C:\Users\jeano\AppData\Local\Programs\Python\Python310;C:\Program Files\Python310;$env:PATH"
     $v = & "$prefix\bin\lldb.exe" --version 2>&1 | Select-String "version"
+    $env:PATH = $savedPath
     Write-Host "  $v" -ForegroundColor Gray
     Check "LLDB version >= 19" { $v -match "version 19\." }
 } catch {
@@ -108,8 +126,10 @@ if (Test-Path $dll) {
 Write-Host ""
 Write-Host "C++ compiler:" -ForegroundColor Yellow
 
-Check "cl.exe (MSVC) in PATH" {
-    $null -ne (Get-Command cl -ErrorAction SilentlyContinue)
+Check "cl.exe (MSVC) or clang-cl in PATH" {
+    ($null -ne (Get-Command cl -ErrorAction SilentlyContinue)) -or
+    ($null -ne (Get-Command clang-cl -ErrorAction SilentlyContinue)) -or
+    (Test-Path (Join-Path $prefix "bin\clang-cl.exe"))
 }
 Check "clang-cl.exe in LLVM" {
     Test-Path (Join-Path $prefix "bin\clang-cl.exe")
@@ -133,12 +153,12 @@ Check "MSVC target active" {
 Write-Host ""
 Write-Host "bindgen / LIBCLANG_PATH:" -ForegroundColor Yellow
 
-Check "LIBCLANG_PATH is set" {
-    -not [string]::IsNullOrEmpty($env:LIBCLANG_PATH)
+Check "libclang.dll found (env or auto)" {
+    -not [string]::IsNullOrEmpty($libclangDir)
 }
-if ($env:LIBCLANG_PATH) {
-    Check "libclang.dll in LIBCLANG_PATH" {
-        Test-Path (Join-Path $env:LIBCLANG_PATH "libclang.dll")
+if ($libclangDir) {
+    Check "libclang.dll accessible" {
+        Test-Path (Join-Path $libclangDir "libclang.dll")
     }
 }
 

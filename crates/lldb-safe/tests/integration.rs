@@ -4,22 +4,27 @@
 /// Run with:
 ///   $env:LLDB_SYS_PREFIX = "C:\Program Files\LLVM"
 ///   cargo test -p lldb-safe -- --test-thread=1
-use lldb_safe::{Debugger, State};
+use lldb_safe::Debugger;
 
 fn setup() {
-    // On Windows, add the LLDB bin dir to the DLL search path before any
-    // LLDB symbols are resolved.
+    // On Windows, optionally hint the DLL search path.  When build.rs copies
+    // liblldb.dll + python310.dll next to the test binary this call is a no-op,
+    // but it helps when running the binary outside of `cargo test`.
     #[cfg(windows)]
     {
-        let dll_dir = std::env::var("LLDB_DLL_DIR")
-            .or_else(|_| {
-                std::env::var("LLDB_SYS_PREFIX")
-                    .map(|p| format!("{}\\bin", p))
-            })
-            .expect(
-                "Set LLDB_DLL_DIR or LLDB_SYS_PREFIX so that liblldb.dll can be found at runtime",
-            );
-        lldb_safe::set_lldb_dll_dir(dll_dir.as_ref());
+        let dll_dir =
+            // 1. Runtime env var (set manually or by the caller)
+            std::env::var("LLDB_DLL_DIR").ok()
+            // 2. Derive from LLDB_SYS_PREFIX
+            .or_else(|| std::env::var("LLDB_SYS_PREFIX").ok().map(|p| format!("{}\\bin", p)))
+            // 3. Compile-time value baked in by build.rs
+            .or_else(|| option_env!("LLDB_DLL_DIR").map(|s| s.to_string()));
+
+        if let Some(dir) = dll_dir {
+            lldb_safe::set_lldb_dll_dir(dir.as_ref());
+        }
+        // If none of the above are set, liblldb.dll was already copied next to
+        // the test binary by build.rs and Windows will find it automatically.
     }
 
     Debugger::initialize();
