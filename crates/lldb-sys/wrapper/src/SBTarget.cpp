@@ -3,6 +3,9 @@
 #include "lldb/API/SBBreakpoint.h"
 #include "lldb/API/SBListener.h"
 #include "lldb/API/SBError.h"
+#include "lldb/API/SBModule.h"
+#include "lldb/API/SBModuleSpec.h"
+#include "lldb/API/SBFileSpec.h"
 #include "../include/lldb_c.h"
 
 extern "C" {
@@ -140,6 +143,32 @@ SBBreakpointRef LLDB_SBTarget_GetBreakpointAtIndex(SBTargetRef ref, uint32_t idx
 const char* LLDB_SBTarget_GetTriple(SBTargetRef ref) {
     if (!ref) return nullptr;
     return reinterpret_cast<lldb::SBTarget*>(ref)->GetTriple();
+}
+
+// ---------------------------------------------------------------------------
+// ReloadModuleWithSymFile — bypass the broken 'target symbols add' CLI by
+// using the SB API directly: remove the existing module, then re-add it with
+// an explicit symbol file spec so LLDB loads the PDB without UUID matching.
+// Returns true if the reloaded module is valid.
+// ---------------------------------------------------------------------------
+bool LLDB_SBTarget_ReloadModuleWithSymFile(SBTargetRef ref,
+                                            const char* exe_path,
+                                            const char* sym_path) {
+    if (!ref || !exe_path || !sym_path) return false;
+    auto* target = reinterpret_cast<lldb::SBTarget*>(ref);
+
+    lldb::SBFileSpec exe_spec(exe_path, /*resolve=*/true);
+    lldb::SBModule existing = target->FindModule(exe_spec);
+    if (existing.IsValid()) {
+        target->RemoveModule(existing);
+    }
+
+    lldb::SBModuleSpec spec;
+    spec.SetFileSpec(exe_spec);
+    spec.SetSymbolFileSpec(lldb::SBFileSpec(sym_path, /*resolve=*/true));
+
+    lldb::SBModule reloaded = target->AddModule(spec);
+    return reloaded.IsValid();
 }
 
 } // extern "C"

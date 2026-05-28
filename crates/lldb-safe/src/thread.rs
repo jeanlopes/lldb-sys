@@ -63,12 +63,16 @@ impl Thread {
 
     pub fn frame_at(&self, idx: u32) -> Option<Frame> {
         let raw = unsafe { LLDB_SBThread_GetFrameAtIndex(self.0, idx) };
-        if raw.is_null() { None } else { Some(Frame::from_raw(raw)) }
+        if raw.is_null() { return None; }
+        let f = Frame::from_raw(raw);
+        if f.is_valid() { Some(f) } else { None }
     }
 
     pub fn selected_frame(&self) -> Option<Frame> {
         let raw = unsafe { LLDB_SBThread_GetSelectedFrame(self.0) };
-        if raw.is_null() { None } else { Some(Frame::from_raw(raw)) }
+        if raw.is_null() { return None; }
+        let f = Frame::from_raw(raw);
+        if f.is_valid() { Some(f) } else { None }
     }
 
     /// Step over the current source line (step over calls).

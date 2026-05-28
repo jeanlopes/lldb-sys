@@ -1,7 +1,11 @@
 #include "lldb/API/SBDebugger.h"
 #include "lldb/API/SBTarget.h"
 #include "lldb/API/SBError.h"
+#include "lldb/API/SBCommandInterpreter.h"
+#include "lldb/API/SBCommandReturnObject.h"
 #include "../include/lldb_c.h"
+#include <string>
+#include <cstring>
 
 extern "C" {
 
@@ -87,6 +91,31 @@ SBTargetRef LLDB_SBDebugger_GetSelectedTarget(SBDebuggerRef ref) {
 
 const char* LLDB_SBDebugger_GetVersionString(void) {
     return lldb::SBDebugger::GetVersionString();
+}
+
+// ---------------------------------------------------------------------------
+// HandleCommand — run a single LLDB CLI command and return its output.
+// The caller must free the returned string with LLDB_FreeString.
+// Returns nullptr if the debugger ref is null.
+// ---------------------------------------------------------------------------
+char* LLDB_SBDebugger_HandleCommand(SBDebuggerRef ref, const char* command) {
+    if (!ref || !command) return nullptr;
+    auto* dbg = reinterpret_cast<lldb::SBDebugger*>(ref);
+    lldb::SBCommandInterpreter interp = dbg->GetCommandInterpreter();
+    lldb::SBCommandReturnObject result;
+    interp.HandleCommand(command, result, false);
+
+    std::string out;
+    if (result.GetOutput())  out += result.GetOutput();
+    if (result.GetError())   out += result.GetError();
+
+    char* buf = new char[out.size() + 1];
+    std::memcpy(buf, out.c_str(), out.size() + 1);
+    return buf;
+}
+
+void LLDB_FreeString(char* ptr) {
+    delete[] ptr;
 }
 
 } // extern "C"

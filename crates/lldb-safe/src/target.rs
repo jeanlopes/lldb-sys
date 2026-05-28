@@ -126,6 +126,20 @@ impl Target {
         let raw = unsafe { LLDB_SBTarget_GetBreakpointAtIndex(self.0, idx) };
         if raw.is_null() { None } else { Some(Breakpoint::from_raw(raw)) }
     }
+
+    /// Force-associate a symbol file (PDB) with the module for `exe_path`.
+    ///
+    /// This bypasses `target symbols add` which is broken in LLDB 19.1.7 on
+    /// Windows when the NativePDB reader is used. Instead it removes the
+    /// existing module and re-adds it via `SBTarget::AddModule(SBModuleSpec)`
+    /// with an explicit symbol file spec — no UUID comparison involved.
+    ///
+    /// Returns `true` if the reloaded module is valid (PDB was accepted).
+    pub fn reload_module_with_sym_file(&self, exe_path: &str, sym_path: &str) -> bool {
+        let c_exe = CString::new(exe_path).unwrap_or_default();
+        let c_sym = CString::new(sym_path).unwrap_or_default();
+        unsafe { LLDB_SBTarget_ReloadModuleWithSymFile(self.0, c_exe.as_ptr(), c_sym.as_ptr()) }
+    }
 }
 
 impl Drop for Target {

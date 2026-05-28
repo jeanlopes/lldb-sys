@@ -56,17 +56,23 @@ impl Process {
 
     pub fn thread_at(&self, idx: usize) -> Option<Thread> {
         let raw = unsafe { LLDB_SBProcess_GetThreadAtIndex(self.0, idx) };
-        if raw.is_null() { None } else { Some(Thread::from_raw(raw)) }
+        if raw.is_null() { return None; }
+        let t = Thread::from_raw(raw);
+        if t.is_valid() { Some(t) } else { None }
     }
 
     pub fn thread_by_id(&self, tid: u64) -> Option<Thread> {
         let raw = unsafe { LLDB_SBProcess_GetThreadByID(self.0, tid) };
-        if raw.is_null() { None } else { Some(Thread::from_raw(raw)) }
+        if raw.is_null() { return None; }
+        let t = Thread::from_raw(raw);
+        if t.is_valid() { Some(t) } else { None }
     }
 
     pub fn selected_thread(&self) -> Option<Thread> {
         let raw = unsafe { LLDB_SBProcess_GetSelectedThread(self.0) };
-        if raw.is_null() { None } else { Some(Thread::from_raw(raw)) }
+        if raw.is_null() { return None; }
+        let t = Thread::from_raw(raw);
+        if t.is_valid() { Some(t) } else { None }
     }
 
     pub fn set_selected_thread(&self, tid: u64) -> bool {

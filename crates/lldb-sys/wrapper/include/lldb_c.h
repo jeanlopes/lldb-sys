@@ -105,6 +105,8 @@ uint32_t      LLDB_SBDebugger_GetNumTargets(SBDebuggerRef ref);
 SBTargetRef   LLDB_SBDebugger_GetTargetAtIndex(SBDebuggerRef ref, uint32_t idx);
 SBTargetRef   LLDB_SBDebugger_GetSelectedTarget(SBDebuggerRef ref);
 const char*   LLDB_SBDebugger_GetVersionString(void);
+char*         LLDB_SBDebugger_HandleCommand(SBDebuggerRef ref, const char* command);
+void          LLDB_FreeString(char* ptr);
 
 /* =========================================================================
  * SBError
@@ -155,6 +157,9 @@ bool            LLDB_SBTarget_DeleteBreakpoint(SBTargetRef ref, uint32_t break_i
 uint32_t        LLDB_SBTarget_GetNumBreakpoints(SBTargetRef ref);
 SBBreakpointRef LLDB_SBTarget_GetBreakpointAtIndex(SBTargetRef ref, uint32_t idx);
 const char*     LLDB_SBTarget_GetTriple(SBTargetRef ref);
+bool            LLDB_SBTarget_ReloadModuleWithSymFile(SBTargetRef ref,
+                                                       const char* exe_path,
+                                                       const char* sym_path);
 
 /* =========================================================================
  * SBProcess
@@ -272,6 +277,25 @@ bool          LLDB_SBFileSpec_IsValid(SBFileSpecRef ref);
 const char*   LLDB_SBFileSpec_GetFilename(SBFileSpecRef ref);
 const char*   LLDB_SBFileSpec_GetDirectory(SBFileSpecRef ref);
 bool          LLDB_SBFileSpec_Exists(SBFileSpecRef ref);
+
+/* =========================================================================
+ * SBLineEntry helpers (accessed via SBFrame)
+ * ========================================================================= */
+void     LLDB_SBFrame_GetLineEntryFile(SBFrameRef frame, char* buf, size_t buf_len);
+uint32_t LLDB_SBFrame_GetLineEntryLine(SBFrameRef frame);
+
+/* =========================================================================
+ * SBFrame::GetVariables helper
+ * Fills `out_refs` with up to `max_count` SBValueRef handles.
+ * Returns the number of values written.
+ * ========================================================================= */
+uint32_t LLDB_SBFrame_GetVariables(SBFrameRef frame,
+                                   bool arguments,
+                                   bool locals,
+                                   bool statics,
+                                   bool in_scope_only,
+                                   SBValueRef* out_refs,
+                                   uint32_t max_count);
 
 /* =========================================================================
  * SBListener

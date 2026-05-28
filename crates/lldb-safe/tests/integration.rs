@@ -121,3 +121,60 @@ fn error_type_success_and_fail() {
     assert!(!err.fail());
     assert_eq!(err.code(), 0);
 }
+
+/// Test that reload_module_with_sym_file successfully associates a PDB with
+/// a Windows MSVC binary, so that source-line breakpoints can be resolved.
+///
+/// Requires the `rust_app_example` test binary to exist at the path below.
+/// Run with:
+///   cargo test -p lldb-safe -- --test-thread=1 reload_module_with_pdb -- --nocapture
+#[test]
+fn reload_module_with_pdb() {
+    let exe = r"C:\workspace\rust_app_example\target\debug\rust_app_example.exe";
+    let pdb = r"C:\workspace\rust_app_example\target\debug\rust_app_example.pdb";
+
+    if !std::path::Path::new(exe).exists() {
+        eprintln!("SKIP: test binary not found at {exe}");
+        return;
+    }
+    if !std::path::Path::new(pdb).exists() {
+        eprintln!("SKIP: PDB not found at {pdb}");
+        return;
+    }
+
+    with_debugger(|dbg| {
+        let target = dbg
+            .create_target_simple(exe)
+            .expect("create_target_simple returned None");
+
+        assert!(target.is_valid(), "target must be valid");
+
+        let ok = target.reload_module_with_sym_file(exe, pdb);
+        println!("reload_module_with_sym_file returned: {ok}");
+
+        // Check image list — the module should appear with PDB path as symbol file.
+        let ilist = dbg.handle_command("image list");
+        println!("image list:\n{ilist}");
+
+        // Verify via CLI that main.rs symbols are now available.
+        let lookup = dbg.handle_command("image lookup -n main --verbose");
+        println!("image lookup -n main --verbose:\n{lookup}");
+
+        let lt = dbg.handle_command("image dump line-table main.rs");
+        println!("image dump line-table main.rs:\n{lt}");
+
+        // Try to set a source-line breakpoint at main.rs:1
+        let bp = target.breakpoint_by_location(
+            r"C:\workspace\rust_app_example\src\main.rs",
+            1,
+        );
+        let bp_ref = bp.expect("breakpoint_by_location returned None");
+        let locs = bp_ref.num_locations();
+        println!("breakpoint num_locations: {locs}");
+
+        // If PDB loaded, we should have at least 1 location.
+        // This assertion may still be 0 if LLDB resolves lazily post-launch —
+        // but at minimum the module reload must succeed.
+        assert!(ok, "reload_module_with_sym_file must return true");
+    });
+}

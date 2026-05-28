@@ -109,6 +109,19 @@ impl Debugger {
             unsafe { CStr::from_ptr(ptr).to_str().unwrap_or("<invalid utf8>") }
         }
     }
+
+    /// Run a single LLDB CLI command and return the combined stdout+stderr output.
+    pub fn handle_command(&self, command: &str) -> String {
+        use std::ffi::CString;
+        let c_cmd = CString::new(command).unwrap_or_default();
+        let ptr = unsafe { LLDB_SBDebugger_HandleCommand(self.0, c_cmd.as_ptr()) };
+        if ptr.is_null() {
+            return String::new();
+        }
+        let s = unsafe { CStr::from_ptr(ptr).to_str().unwrap_or("").to_owned() };
+        unsafe { LLDB_FreeString(ptr) };
+        s
+    }
 }
 
 impl Drop for Debugger {
