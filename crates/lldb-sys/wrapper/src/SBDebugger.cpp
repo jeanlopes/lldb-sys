@@ -1,6 +1,7 @@
 #include "lldb/API/SBDebugger.h"
 #include "lldb/API/SBTarget.h"
 #include "lldb/API/SBError.h"
+#include "lldb/API/SBListener.h"
 #include "lldb/API/SBCommandInterpreter.h"
 #include "lldb/API/SBCommandReturnObject.h"
 #include "../include/lldb_c.h"
@@ -116,6 +117,13 @@ char* LLDB_SBDebugger_HandleCommand(SBDebuggerRef ref, const char* command) {
 
 void LLDB_FreeString(char* ptr) {
     delete[] ptr;
+}
+
+SBListenerRef LLDB_SBDebugger_GetListener(SBDebuggerRef ref) {
+    if (!ref) return nullptr;
+    lldb::SBListener l = reinterpret_cast<lldb::SBDebugger*>(ref)->GetListener();
+    if (!l.IsValid()) return nullptr;
+    return reinterpret_cast<SBListenerRef>(new lldb::SBListener(l));
 }
 
 } // extern "C"

@@ -30,6 +30,7 @@ typedef void* SBSymbolRef;
 typedef void* SBModuleRef;
 typedef void* SBListenerRef;
 typedef void* SBEventRef;
+typedef void* SBBroadcasterRef;
 
 /* =========================================================================
  * Enumerations (mirror lldb-enumerations.h)
@@ -107,6 +108,7 @@ SBTargetRef   LLDB_SBDebugger_GetSelectedTarget(SBDebuggerRef ref);
 const char*   LLDB_SBDebugger_GetVersionString(void);
 char*         LLDB_SBDebugger_HandleCommand(SBDebuggerRef ref, const char* command);
 void          LLDB_FreeString(char* ptr);
+SBListenerRef LLDB_SBDebugger_GetListener(SBDebuggerRef ref);
 
 /* =========================================================================
  * SBError
@@ -191,6 +193,10 @@ size_t        LLDB_SBProcess_WriteMemory(SBProcessRef ref,
                                           const void*  buf,
                                           size_t       size,
                                           SBErrorRef   error);
+SBBroadcasterRef LLDB_SBProcess_GetBroadcaster(SBProcessRef ref);
+LLDBStateType    LLDB_SBProcess_GetStateFromEvent(SBEventRef event);
+bool             LLDB_SBProcess_GetRestartedFromEvent(SBEventRef event);
+bool             LLDB_SBProcess_EventIsProcessEvent(SBEventRef event);
 
 /* =========================================================================
  * SBThread
@@ -303,6 +309,25 @@ uint32_t LLDB_SBFrame_GetVariables(SBFrameRef frame,
 SBListenerRef LLDB_SBListener_Create(const char* name);
 void          LLDB_SBListener_Destroy(SBListenerRef ref);
 bool          LLDB_SBListener_IsValid(SBListenerRef ref);
+bool          LLDB_SBListener_WaitForEvent(SBListenerRef ref,
+                                            uint32_t      timeout_secs,
+                                            SBEventRef*   event_out);
+
+/* =========================================================================
+ * SBEvent
+ * ========================================================================= */
+void     LLDB_SBEvent_Destroy(SBEventRef ref);
+bool     LLDB_SBEvent_IsValid(SBEventRef ref);
+uint32_t LLDB_SBEvent_GetType(SBEventRef ref);
+
+/* =========================================================================
+ * SBBroadcaster
+ * ========================================================================= */
+void LLDB_SBBroadcaster_Destroy(SBBroadcasterRef ref);
+bool LLDB_SBBroadcaster_IsValid(SBBroadcasterRef ref);
+bool LLDB_SBBroadcaster_AddListener(SBBroadcasterRef ref,
+                                     SBListenerRef    listener,
+                                     uint32_t         event_mask);
 
 #ifdef __cplusplus
 } /* extern "C" */

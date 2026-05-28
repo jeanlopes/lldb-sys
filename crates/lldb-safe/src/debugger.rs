@@ -1,6 +1,7 @@
 use lldb_sys::*;
 use std::ffi::CStr;
 use crate::{Error, Target};
+use crate::listener::Listener;
 
 /// Owns an `SBDebugger` instance.
 ///
@@ -121,6 +122,12 @@ impl Debugger {
         let s = unsafe { CStr::from_ptr(ptr).to_str().unwrap_or("").to_owned() };
         unsafe { LLDB_FreeString(ptr) };
         s
+    }
+
+    /// Get the debugger's default listener (used in async mode for event delivery).
+    pub fn get_listener(&self) -> Option<Listener> {
+        let raw = unsafe { LLDB_SBDebugger_GetListener(self.0) };
+        if raw.is_null() { None } else { Some(Listener::from_raw(raw)) }
     }
 }
 

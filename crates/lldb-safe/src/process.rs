@@ -1,6 +1,8 @@
 use lldb_sys::*;
 use std::ffi::CStr;
 use crate::{Error, State, Thread};
+use crate::event::Event;
+use crate::broadcaster::Broadcaster;
 
 /// Wraps `SBProcessRef`.
 pub struct Process(SBProcessRef);
@@ -108,6 +110,27 @@ impl Process {
                 self.0, addr, buf.as_ptr() as *const _, buf.len(), err.as_raw())
         };
         if err.fail() { Err(err) } else { Ok(n) }
+    }
+
+    /// Get the SBBroadcaster for this process (to subscribe a listener).
+    pub fn get_broadcaster(&self) -> Option<Broadcaster> {
+        let raw = unsafe { LLDB_SBProcess_GetBroadcaster(self.0) };
+        if raw.is_null() { None } else { Some(Broadcaster::from_raw(raw)) }
+    }
+
+    /// Extract the process state from an event (static method).
+    pub fn state_from_event(event: &Event) -> State {
+        State::from_raw(unsafe { LLDB_SBProcess_GetStateFromEvent(event.as_raw()) } as u32)
+    }
+
+    /// Returns true if the stop was an internal auto-continue (not user-visible).
+    pub fn restarted_from_event(event: &Event) -> bool {
+        unsafe { LLDB_SBProcess_GetRestartedFromEvent(event.as_raw()) }
+    }
+
+    /// Returns true if the event is a process state-change event.
+    pub fn is_process_event(event: &Event) -> bool {
+        unsafe { LLDB_SBProcess_EventIsProcessEvent(event.as_raw()) }
     }
 }
 

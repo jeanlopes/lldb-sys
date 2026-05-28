@@ -6,6 +6,9 @@ pub mod thread;
 pub mod frame;
 pub mod breakpoint;
 pub mod value;
+pub mod event;
+pub mod broadcaster;
+pub mod listener;
 
 pub use debugger::Debugger;
 pub use error::Error;
@@ -15,6 +18,9 @@ pub use thread::Thread;
 pub use frame::Frame;
 pub use breakpoint::Breakpoint;
 pub use value::Value;
+pub use event::Event;
+pub use broadcaster::Broadcaster;
+pub use listener::Listener;
 
 /// Process state, mirroring LLDB's `StateType` enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

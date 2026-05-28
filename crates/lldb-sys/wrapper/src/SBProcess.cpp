@@ -1,6 +1,8 @@
 #include "lldb/API/SBProcess.h"
 #include "lldb/API/SBThread.h"
 #include "lldb/API/SBError.h"
+#include "lldb/API/SBEvent.h"
+#include "lldb/API/SBBroadcaster.h"
 #include "../include/lldb_c.h"
 
 extern "C" {
@@ -147,6 +149,32 @@ size_t LLDB_SBProcess_WriteMemory(SBProcessRef ref,
         ? reinterpret_cast<lldb::SBError*>(error_ref)
         : &local_err;
     return proc->WriteMemory(static_cast<lldb::addr_t>(addr), buf, size, *err);
+}
+
+SBBroadcasterRef LLDB_SBProcess_GetBroadcaster(SBProcessRef ref) {
+    if (!ref) return nullptr;
+    lldb::SBBroadcaster b = reinterpret_cast<lldb::SBProcess*>(ref)->GetBroadcaster();
+    if (!b.IsValid()) return nullptr;
+    return reinterpret_cast<SBBroadcasterRef>(new lldb::SBBroadcaster(b));
+}
+
+LLDBStateType LLDB_SBProcess_GetStateFromEvent(SBEventRef event) {
+    if (!event) return LLDB_STATE_INVALID;
+    return static_cast<LLDBStateType>(
+        lldb::SBProcess::GetStateFromEvent(
+            *reinterpret_cast<lldb::SBEvent*>(event)));
+}
+
+bool LLDB_SBProcess_GetRestartedFromEvent(SBEventRef event) {
+    if (!event) return false;
+    return lldb::SBProcess::GetRestartedFromEvent(
+        *reinterpret_cast<lldb::SBEvent*>(event));
+}
+
+bool LLDB_SBProcess_EventIsProcessEvent(SBEventRef event) {
+    if (!event) return false;
+    return lldb::SBProcess::EventIsProcessEvent(
+        *reinterpret_cast<lldb::SBEvent*>(event));
 }
 
 } // extern "C"
